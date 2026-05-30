@@ -1,0 +1,301 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Nunito+Sans:wght@400;500;600&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --pink: #F9A8C9;
+  --pink-light: #FDE8F2;
+  --pink-lighter: #FFF0F7;
+  --pink-dark: #E87BAF;
+  --pink-deep: #D4609A;
+  --accent: #F472B6;
+  --bg: #FFF5FA;
+  --white: #FFFFFF;
+  --text: #3D1A2E;
+  --text2: #9C6B84;
+  --text3: #C4A0B5;
+  --border: #F5D0E8;
+  --border2: #FBECF5;
+  --gray-light: #FBF0F6;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --shadow: 0 4px 24px rgba(244,114,182,0.15);
+  --shadow-sm: 0 2px 12px rgba(244,114,182,0.1);
+}
+
+body {
+  font-family: 'Nunito Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-container {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--white);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 버튼 */
+.btn-primary {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #F9A8C9, #F472B6);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+  box-shadow: 0 4px 16px rgba(244,114,182,0.3);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(244,114,182,0.4); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-secondary {
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+  color: var(--pink-deep);
+  border: 2px solid var(--pink);
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-secondary:hover { background: var(--pink-lighter); }
+
+/* 인풋 */
+.input-field {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-family: 'Nunito Sans', sans-serif;
+  color: var(--text);
+  background: var(--white);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input-field:focus { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(249,168,201,0.2); }
+.input-field::placeholder { color: var(--text3); }
+
+/* 바텀 네비게이션 */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  background: var(--white);
+  border-top: 1px solid var(--border2);
+  display: flex;
+  padding: 8px 0 20px;
+  z-index: 100;
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 10px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+.nav-item.active { color: var(--pink-deep); }
+.nav-item svg { width: 24px; height: 24px; }
+
+/* 카드 */
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  padding: 20px;
+}
+
+/* 태그/칩 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--pink-lighter);
+  color: var(--pink-deep);
+  border: 1.5px solid var(--border);
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'Nunito', sans-serif;
+}
+.chip:hover { background: var(--pink-light); }
+.chip.selected { background: linear-gradient(135deg, #F9A8C9, #F472B6); color: white; border-color: transparent; box-shadow: 0 2px 8px rgba(244,114,182,0.3); }
+
+/* 로딩 스피너 */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--pink-light);
+  border-top-color: var(--pink);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 알림 뱃지 */
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--pink-deep);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 페이지 헤더 */
+.page-header {
+  padding: 60px 24px 20px;
+  background: var(--white);
+}
+
+.page-title {
+  font-family: 'Nunito', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.page-subtitle {
+  font-size: 15px;
+  color: var(--text2);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* 매칭 알림 팝업 */
+.match-popup {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(61,26,46,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.match-popup-card {
+  background: white;
+  border-radius: 28px;
+  padding: 32px 24px;
+  margin: 24px;
+  text-align: center;
+  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 20px 60px rgba(244,114,182,0.3);
+}
+@keyframes slideUp {
+  from { transform: translateY(60px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* 아바타 */
+.avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--pink-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--pink-deep);
+  overflow: hidden;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* 섹션 라벨 */
+.section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+/* 토글 스위치 */
+.toggle {
+  position: relative;
+  width: 52px;
+  height: 28px;
+}
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--border);
+  border-radius: 99px;
+  transition: 0.3s;
+}
+.toggle-slider:before {
+  content: '';
+  position: absolute;
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+  box-shadow: var(--shadow-sm);
+}
+.toggle input:checked + .toggle-slider { background: linear-gradient(135deg, #F9A8C9, #F472B6); }
+.toggle input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+/* 선택 버튼 그룹 */
+.select-btn {
+  padding: 10px 16px;
+  border-radius: 99px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  font-family: 'Nunito', sans-serif;
+  color: var(--text2);
+  transition: all 0.15s;
+}
+.select-btn:hover { border-color: var(--pink); color: var(--pink-deep); background: var(--pink-lighter); }
+.select-btn.selected { background: linear-gradient(135deg, #F9A8C9, #F472B6); color: white; border-color: transparent; box-shadow: 0 2px 8px rgba(244,114,182,0.3); }
