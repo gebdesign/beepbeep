@@ -113,8 +113,20 @@ export function useMatching({ onMatch, isActive, currentMode }) {
         checkNearbyUsers(latitude, longitude)
       },
       (err) => console.error('GPS error:', err),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
+
+    // 10초마다 주기적으로 매칭 탐색 (GPS 느린 경우 대비)
+    const intervalId = setInterval(() => {
+      if (myLocationRef.current) {
+        checkNearbyUsers(myLocationRef.current.lat, myLocationRef.current.lon)
+      }
+    }, 10000)
+
+    return () => {
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
+      clearInterval(intervalId)
+    }
 
     return () => {
       if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
