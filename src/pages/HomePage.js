@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { useMatching } from '../hooks/useMatching'
+import { supabase } from '../lib/supabase'
 
 const MODES = [
   { id: 'daily', label: '데일리', emoji: '☀️', desc: '일상, 카페, 출퇴근' },
@@ -17,17 +18,46 @@ const MODES = [
   { id: 'pet', label: '반려동물', emoji: '🐾', desc: '펫카페' },
 ]
 
-export default function HomePage() {
-  const { profile } = useAuth()
+// 심장박동 진동 패턴: 두두 두두 두두
+function heartbeatVibrate() {
+  if (navigator.vibrate) {
+    navigator.vibrate([100, 50, 100, 300, 100, 50, 100, 300, 100, 50, 100])
+  }
+}
+
+export default function HomePage({ onGoToChat }) {
+  const { profile, user } = useAuth()
   const [activeMode, setActiveMode] = useState(null)
   const [isActive, setIsActive] = useState(false)
   const [matchNotifs, setMatchNotifs] = useState([])
   const [showMatch, setShowMatch] = useState(null)
+  const [pendingInvites, setPendingInvites] = useState([])
+
+  // 실시간으로 나한테 온 채팅 요청 감지
+  useEffect(() => {
+    if (!user) return
+    const sub = supabase
+      .channel('match-invites')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'matches',
+        filter: `user2_id=eq.${user.id}`
+      }, async (payload) => {
+        // 상대방 프로필 가져오기
+        const { data: senderProfile } = await supabase
+          .from('profiles').select('*').eq('id', payload.new.user1_id).single()
+        if (senderProfile) {
+          heartbeatVibrate()
+          setPendingInvites(prev => [...prev, { matchId: payload.new.id, profile: senderProfile }])
+        }
+      })
+      .subscribe()
+    return () => supabase.removeChannel(sub)
+  }, [user])
 
   function handleMatch(matchData) {
     setShowMatch(matchData)
     setMatchNotifs(prev => [matchData, ...prev])
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200])
+    heartbeatVibrate()
   }
 
   useMatching({ onMatch: handleMatch, isActive: isActive && !!activeMode, currentMode: activeMode })
@@ -35,6 +65,24 @@ export default function HomePage() {
   function toggleMode(modeId) {
     if (activeMode === modeId && isActive) { setIsActive(false); setActiveMode(null) }
     else { setActiveMode(modeId); setIsActive(true) }
+  }
+
+  async function handleChatRequest(matchId) {
+    // 매칭 status를 accepted로 변경
+    await supabase.from('matches').update({ status: 'accepted' }).eq('id', matchId)
+    setShowMatch(null)
+    onGoToChat && onGoToChat()
+  }
+
+  async function acceptInvite(matchId) {
+    await supabase.from('matches').update({ status: 'accepted' }).eq('id', matchId)
+    setPendingInvites(prev => prev.filter(i => i.matchId !== matchId))
+    onGoToChat && onGoToChat()
+  }
+
+  async function rejectInvite(matchId) {
+    await supabase.from('matches').update({ status: 'rejected' }).eq('id', matchId)
+    setPendingInvites(prev => prev.filter(i => i.matchId !== matchId))
   }
 
   const selectedMode = MODES.find(m => m.id === activeMode)
@@ -71,6 +119,23 @@ export default function HomePage() {
           <div style={{ fontSize: 14, color: '#C4A0B5', textAlign: 'center' }}>아래에서 모드를 선택하면 매칭이 시작돼요 👇</div>
         </div>
       )}
+
+      {/* 채팅 요청 알림 */}
+      {pendingInvites.map(invite => (
+        <div key={invite.matchId} style={{ margin: '0 16px 12px', padding: '16px', background: 'white', borderRadius: 18, border: '2px solid #F472B6', boxShadow: '0 4px 20px rgba(244,114,182,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <div className="avatar">{invite.profile.name?.[0]}</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E' }}>{invite.profile.name}님이 채팅을 요청했어요 💬</div>
+              <div style={{ fontSize: 13, color: '#9C6B84' }}>{invite.profile.hobbies?.slice(0, 2).join(', ')}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-primary" onClick={() => acceptInvite(invite.matchId)} style={{ flex: 1, padding: '12px' }}>수락 ✓</button>
+            <button className="btn-secondary" onClick={() => rejectInvite(invite.matchId)} style={{ flex: 1, padding: '12px' }}>거절</button>
+          </div>
+        </div>
+      ))}
 
       {/* 모드 그리드 */}
       <div style={{ padding: '0 16px' }}>
@@ -137,13 +202,17 @@ export default function HomePage() {
                 ))}
               </div>
             )}
-            <button className="btn-primary" onClick={() => setShowMatch(null)} style={{ marginBottom: 10 }}>채팅하러 가기 💬</button>
+            <button className="btn-primary" onClick={() => handleChatRequest(showMatch.matchId)} style={{ marginBottom: 10 }}>
+              채팅 요청하기 💬
+            </button>
             <button className="btn-secondary" onClick={() => setShowMatch(null)}>나중에</button>
           </div>
         </div>
       )}
 
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+      <style>{`
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+      `}</style>
     </div>
   )
 }
