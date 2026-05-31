@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { useMatching } from '../hooks/useMatching'
 import { supabase } from '../lib/supabase'
@@ -18,10 +18,36 @@ const MODES = [
   { id: 'pet', label: '반려동물', emoji: '🐾', desc: '펫카페' },
 ]
 
-// 심장박동 진동 패턴: 두두 두두 두두
-function heartbeatVibrate() {
+// 심장박동 비프음 (두근두근)
+function playHeartbeat() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    
+    function beat(time) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.frequency.value = 80
+      osc.type = 'sine'
+      gain.gain.setValueAtTime(0, time)
+      gain.gain.linearRampToValueAtTime(0.8, time + 0.02)
+      gain.gain.linearRampToValueAtTime(0, time + 0.12)
+      osc.start(time)
+      osc.stop(time + 0.12)
+    }
+
+    // 두근 두근 두근 (3번)
+    for (let i = 0; i < 3; i++) {
+      beat(ctx.currentTime + i * 0.6)
+      beat(ctx.currentTime + i * 0.6 + 0.18)
+    }
+  } catch (e) {
+    console.log('Audio not supported')
+  }
+  // 안드로이드는 진동도 같이
   if (navigator.vibrate) {
-    navigator.vibrate([100, 50, 100, 300, 100, 50, 100, 300, 100, 50, 100])
+    navigator.vibrate([100, 50, 100, 400, 100, 50, 100, 400, 100, 50, 100])
   }
 }
 
@@ -31,33 +57,65 @@ export default function HomePage({ onGoToChat }) {
   const [isActive, setIsActive] = useState(false)
   const [matchNotifs, setMatchNotifs] = useState([])
   const [showMatch, setShowMatch] = useState(null)
-  const [pendingInvites, setPendingInvites] = useState([])
+  const [chatRequest, setChatRequest] = useState(null) // 상대방이 보낸 채팅 요청
+  const [countdown, setCountdown] = useState(null) // 카운트다운
+  const countdownRef = useRef(null)
+  const audioUnlocked = useRef(false)
 
-  // 실시간으로 나한테 온 채팅 요청 감지
+  // 화면 터치시 오디오 언락 (아이폰 필수)
+  useEffect(() => {
+    function unlock() {
+      if (!audioUnlocked.current) {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)()
+          ctx.resume()
+          audioUnlocked.current = true
+        } catch(e) {}
+      }
+    }
+    document.addEventListener('touchstart', unlock, { once: true })
+    document.addEventListener('click', unlock, { once: true })
+    return () => {
+      document.removeEventListener('touchstart', unlock)
+      document.removeEventListener('click', unlock)
+    }
+  }, [])
+
+  // 상대방 채팅 요청 실시간 감지
   useEffect(() => {
     if (!user) return
     const sub = supabase
-      .channel('match-invites')
+      .channel('chat-requests')
       .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'matches',
-        filter: `user2_id=eq.${user.id}`
+        event: 'UPDATE', schema: 'public', table: 'matches',
       }, async (payload) => {
-        // 상대방 프로필 가져오기
-        const { data: senderProfile } = await supabase
-          .from('profiles').select('*').eq('id', payload.new.user1_id).single()
-        if (senderProfile) {
-          heartbeatVibrate()
-          setPendingInvites(prev => [...prev, { matchId: payload.new.id, profile: senderProfile }])
+        const match = payload.new
+        // 내가 user2이고 상대가 chat_requested한 경우
+        if (match.user2_id === user.id && match.status === 'chat_requested') {
+          const { data: senderProfile } = await supabase
+            .from('profiles').select('*').eq('id', match.user1_id).single()
+          if (senderProfile) {
+            playHeartbeat()
+            setChatRequest({ matchId: match.id, profile: senderProfile })
+          }
+        }
+        // 양쪽 다 수락해서 accepted된 경우
+        if ((match.user1_id === user.id || match.user2_id === user.id) && match.status === 'accepted') {
+          clearInterval(countdownRef.current)
+          setCountdown(null)
+          setShowMatch(null)
+          setChatRequest(null)
+          onGoToChat && onGoToChat()
         }
       })
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [user])
+  }, [user, onGoToChat])
 
   function handleMatch(matchData) {
     setShowMatch(matchData)
     setMatchNotifs(prev => [matchData, ...prev])
-    heartbeatVibrate()
+    playHeartbeat()
   }
 
   useMatching({ onMatch: handleMatch, isActive: isActive && !!activeMode, currentMode: activeMode })
@@ -67,22 +125,41 @@ export default function HomePage({ onGoToChat }) {
     else { setActiveMode(modeId); setIsActive(true) }
   }
 
-  async function handleChatRequest(matchId) {
-    // 매칭 status를 accepted로 변경
-    await supabase.from('matches').update({ status: 'accepted' }).eq('id', matchId)
-    setShowMatch(null)
+  // 채팅 요청하기
+  async function handleChatRequest() {
+    if (!showMatch?.matchId) return
+    await supabase.from('matches').update({ status: 'chat_requested' }).eq('id', showMatch.matchId)
+    
+    // 10초 카운트다운
+    setCountdown(10)
+    let count = 10
+    countdownRef.current = setInterval(async () => {
+      count--
+      setCountdown(count)
+      if (count <= 0) {
+        clearInterval(countdownRef.current)
+        setCountdown(null)
+        // 시간 초과 - 거절 처리
+        await supabase.from('matches').update({ status: 'rejected' }).eq('id', showMatch.matchId)
+        setShowMatch(null)
+        alert('상대방이 다음에 만나요 😊')
+      }
+    }, 1000)
+  }
+
+  // 채팅 수락
+  async function acceptChat() {
+    if (!chatRequest?.matchId) return
+    await supabase.from('matches').update({ status: 'accepted' }).eq('id', chatRequest.matchId)
+    setChatRequest(null)
     onGoToChat && onGoToChat()
   }
 
-  async function acceptInvite(matchId) {
-    await supabase.from('matches').update({ status: 'accepted' }).eq('id', matchId)
-    setPendingInvites(prev => prev.filter(i => i.matchId !== matchId))
-    onGoToChat && onGoToChat()
-  }
-
-  async function rejectInvite(matchId) {
-    await supabase.from('matches').update({ status: 'rejected' }).eq('id', matchId)
-    setPendingInvites(prev => prev.filter(i => i.matchId !== matchId))
+  // 채팅 거절
+  async function rejectChat() {
+    if (!chatRequest?.matchId) return
+    await supabase.from('matches').update({ status: 'rejected' }).eq('id', chatRequest.matchId)
+    setChatRequest(null)
   }
 
   const selectedMode = MODES.find(m => m.id === activeMode)
@@ -119,23 +196,6 @@ export default function HomePage({ onGoToChat }) {
           <div style={{ fontSize: 14, color: '#C4A0B5', textAlign: 'center' }}>아래에서 모드를 선택하면 매칭이 시작돼요 👇</div>
         </div>
       )}
-
-      {/* 채팅 요청 알림 */}
-      {pendingInvites.map(invite => (
-        <div key={invite.matchId} style={{ margin: '0 16px 12px', padding: '16px', background: 'white', borderRadius: 18, border: '2px solid #F472B6', boxShadow: '0 4px 20px rgba(244,114,182,0.2)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-            <div className="avatar">{invite.profile.name?.[0]}</div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E' }}>{invite.profile.name}님이 채팅을 요청했어요 💬</div>
-              <div style={{ fontSize: 13, color: '#9C6B84' }}>{invite.profile.hobbies?.slice(0, 2).join(', ')}</div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn-primary" onClick={() => acceptInvite(invite.matchId)} style={{ flex: 1, padding: '12px' }}>수락 ✓</button>
-            <button className="btn-secondary" onClick={() => rejectInvite(invite.matchId)} style={{ flex: 1, padding: '12px' }}>거절</button>
-          </div>
-        </div>
-      ))}
 
       {/* 모드 그리드 */}
       <div style={{ padding: '0 16px' }}>
@@ -184,12 +244,35 @@ export default function HomePage({ onGoToChat }) {
         </div>
       )}
 
+      {/* 상대방 채팅 요청 팝업 */}
+      {chatRequest && (
+        <div className="match-popup">
+          <div className="match-popup-card">
+            <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
+            <h3 style={{ fontFamily: 'Nunito', fontSize: 20, fontWeight: 800, marginBottom: 8, color: '#3D1A2E' }}>
+              채팅 요청이 왔어요!
+            </h3>
+            <div className="avatar" style={{ width: 64, height: 64, fontSize: 24, margin: '0 auto 12px' }}>
+              {chatRequest.profile.name?.[0]}
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, color: '#3D1A2E' }}>{chatRequest.profile.name}</div>
+            <div style={{ color: '#9C6B84', fontSize: 13, marginBottom: 20 }}>
+              {chatRequest.profile.hobbies?.slice(0, 2).join(' • ')}
+            </div>
+            <button className="btn-primary" onClick={acceptChat} style={{ marginBottom: 10 }}>수락 ✓</button>
+            <button className="btn-secondary" onClick={rejectChat}>나중에</button>
+          </div>
+        </div>
+      )}
+
       {/* 매칭 팝업 */}
-      {showMatch && (
-        <div className="match-popup" onClick={() => setShowMatch(null)}>
-          <div className="match-popup-card" onClick={e => e.stopPropagation()}>
+      {showMatch && !chatRequest && (
+        <div className="match-popup">
+          <div className="match-popup-card">
             <div style={{ fontSize: 48, marginBottom: 12 }}>💕</div>
-            <h3 style={{ fontFamily: 'Nunito', fontSize: 22, fontWeight: 800, marginBottom: 8, color: '#3D1A2E' }}>매칭됐어요!</h3>
+            <h3 style={{ fontFamily: 'Nunito', fontSize: 22, fontWeight: 800, marginBottom: 8, color: '#3D1A2E' }}>
+              근처에 있어요!
+            </h3>
             <div className="avatar" style={{ width: 72, height: 72, fontSize: 28, margin: '0 auto 16px' }}>
               {showMatch.profile.name?.[0] || '?'}
             </div>
@@ -202,10 +285,19 @@ export default function HomePage({ onGoToChat }) {
                 ))}
               </div>
             )}
-            <button className="btn-primary" onClick={() => handleChatRequest(showMatch.matchId)} style={{ marginBottom: 10 }}>
-              채팅 요청하기 💬
-            </button>
-            <button className="btn-secondary" onClick={() => setShowMatch(null)}>나중에</button>
+            {countdown !== null ? (
+              <div style={{ padding: '16px', background: '#FDE8F2', borderRadius: 14, marginBottom: 10, textAlign: 'center' }}>
+                <div style={{ fontSize: 32, fontWeight: 800, color: '#D4609A', fontFamily: 'Nunito' }}>{countdown}</div>
+                <div style={{ fontSize: 13, color: '#9C6B84' }}>상대방 응답 기다리는 중...</div>
+              </div>
+            ) : (
+              <button className="btn-primary" onClick={handleChatRequest} style={{ marginBottom: 10 }}>
+                채팅하기 💬
+              </button>
+            )}
+            {countdown === null && (
+              <button className="btn-secondary" onClick={() => setShowMatch(null)}>나중에</button>
+            )}
           </div>
         </div>
       )}
