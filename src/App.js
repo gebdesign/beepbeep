@@ -22,7 +22,6 @@ function AppContent() {
 
   if (!user) return <AuthPage />
 
-  // 이메일 인증 안 된 경우
   if (emailNotConfirmed) return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', background: '#FFF5FA' }}>
       <div style={{ fontSize: 64, marginBottom: 20 }}>📧</div>
@@ -38,7 +37,7 @@ function AppContent() {
 
   return (
     <div className="app-container">
-      {page === 'home' && <HomePage />}
+      {page === 'home' && <HomePage onGoToChat={() => setPage('chat')} />}
       {page === 'explore' && <ExplorePage />}
       {page === 'chat' && <ChatPage />}
       {page === 'mypage' && <MyPage />}
