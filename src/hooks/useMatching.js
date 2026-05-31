@@ -15,7 +15,6 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 function isGoodMatch(myProfile, theirProfile) {
-  // 성별 매칭 체크
   if (myProfile.match_preference === 'opposite') {
     if (myProfile.gender === 'male' && theirProfile.gender !== 'female') return false
     if (myProfile.gender === 'female' && theirProfile.gender !== 'male') return false
@@ -23,7 +22,6 @@ function isGoodMatch(myProfile, theirProfile) {
     if (myProfile.gender !== theirProfile.gender) return false
   }
 
-  // 상대방도 나를 매칭할 수 있는지 체크
   if (theirProfile.match_preference === 'opposite') {
     if (theirProfile.gender === 'male' && myProfile.gender !== 'female') return false
     if (theirProfile.gender === 'female' && myProfile.gender !== 'male') return false
@@ -31,7 +29,6 @@ function isGoodMatch(myProfile, theirProfile) {
     if (theirProfile.gender !== myProfile.gender) return false
   }
 
-  // 공통 취미 체크 (1개 이상 겹치면 매칭)
   const myHobbies = myProfile.hobbies || []
   const theirHobbies = theirProfile.hobbies || []
   const commonHobbies = myHobbies.filter(h => theirHobbies.includes(h))
@@ -61,7 +58,6 @@ export function useMatching({ onMatch, isActive, currentMode }) {
   const checkNearbyUsers = useCallback(async (myLat, myLon) => {
     if (!profile || !isActive) return
 
-    // 최근 5분 이내 활성 유저들 가져오기
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
     const { data: nearbyLocations } = await supabase
       .from('locations')
@@ -79,13 +75,18 @@ export function useMatching({ onMatch, isActive, currentMode }) {
       if (distance <= MATCH_RADIUS_METERS && loc.profiles) {
         if (isGoodMatch(profile, loc.profiles)) {
           notifiedUsersRef.current.add(loc.user_id)
-          onMatch && onMatch({ profile: loc.profiles, distance: Math.round(distance) })
 
-          // 매칭 DB에 저장
-          await supabase.from('matches').insert({
+          // 매칭 DB에 저장하고 matchId 받아오기
+          const { data: matchData } = await supabase.from('matches').insert({
             user1_id: user.id,
             user2_id: loc.user_id,
             status: 'pending'
+          }).select().single()
+
+          onMatch && onMatch({
+            profile: loc.profiles,
+            distance: Math.round(distance),
+            matchId: matchData?.id
           })
         }
       }
