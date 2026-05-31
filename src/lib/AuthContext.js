@@ -7,17 +7,33 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
+      const u = session?.user ?? null
+      if (u && !u.email_confirmed_at) {
+        setEmailNotConfirmed(true)
+        setLoading(false)
+        return
+      }
+      setUser(u)
+      if (u) fetchProfile(u.id)
       else setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const u = session?.user ?? null
+      if (u && !u.email_confirmed_at) {
+        setEmailNotConfirmed(true)
+        setLoading(false)
+        return
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setEmailNotConfirmed(false)
+      }
+      setUser(u)
+      if (u) fetchProfile(u.id)
       else { setProfile(null); setLoading(false) }
     })
 
@@ -31,7 +47,13 @@ export function AuthProvider({ children }) {
   }
 
   async function signUp(email, password) {
-    return supabase.auth.signUp({ email, password })
+    return supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: 'https://beepbeep-lake.vercel.app'
+      }
+    })
   }
 
   async function signIn(email, password) {
@@ -53,7 +75,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, updateProfile, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, emailNotConfirmed, signUp, signIn, signOut, updateProfile, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )
