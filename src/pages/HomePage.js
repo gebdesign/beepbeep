@@ -85,7 +85,7 @@ export default function HomePage({ onGoToChat }) {
   useEffect(() => {
     if (!user) return
     const sub = supabase
-      .channel('chat-requests')
+      .channel('match-updates-' + (user?.id || 'anon'))
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'matches',
       }, async (payload) => {
