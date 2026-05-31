@@ -10,17 +10,30 @@ import BottomNav from './components/BottomNav'
 import './styles.css'
 
 function AppContent() {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, emailNotConfirmed } = useAuth()
   const [page, setPage] = useState('home')
 
   if (loading) return (
-    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-      <div style={{ fontFamily: 'Nunito', fontSize: 32, fontWeight: 800, color: '#FF6B6B' }}>beepbeep</div>
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: '#FFF5FA' }}>
+      <div style={{ fontFamily: 'Nunito', fontSize: 32, fontWeight: 800, color: '#D4609A' }}>beepbeep</div>
       <div className="spinner" />
     </div>
   )
 
   if (!user) return <AuthPage />
+
+  // 이메일 인증 안 된 경우
+  if (emailNotConfirmed) return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', background: '#FFF5FA' }}>
+      <div style={{ fontSize: 64, marginBottom: 20 }}>📧</div>
+      <h2 style={{ fontFamily: 'Nunito', fontSize: 24, fontWeight: 800, marginBottom: 12, color: '#3D1A2E' }}>이메일 인증이 필요해요</h2>
+      <p style={{ color: '#9C6B84', lineHeight: 1.6, marginBottom: 32 }}>
+        가입하신 이메일로 인증 링크를 보냈어요.<br/>링크를 클릭하면 로그인이 완료돼요.
+      </p>
+      <p style={{ color: '#C4A0B5', fontSize: 13 }}>이메일이 안 왔으면 스팸 폴더를 확인해봐요</p>
+    </div>
+  )
+
   if (!profile?.name) return <ProfileSetup onComplete={() => {}} />
 
   return (
