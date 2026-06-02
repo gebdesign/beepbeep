@@ -83,12 +83,16 @@ export default function ChatPage({ initialMatchId }) {
     const content = newMsg.trim()
     setNewMsg('')
     await supabase.from('messages').insert({ match_id: activeMatch.id, sender_id: user.id, content })
+    // 키보드 유지
+    setTimeout(() => inputRef.current?.focus(), 50)
   }
 
   async function deleteMatch(matchId) {
     await supabase.from('matches').update({ status: 'rejected' }).eq('id', matchId)
     setMatches(prev => prev.filter(m => m.id !== matchId))
     setDeleteMatchId(null)
+    // 삭제 후 목록으로만 이동, 채팅방 안 열림
+    if (activeMatch?.id === matchId) setActiveMatch(null)
   }
 
   function getOtherUser(match) {
@@ -134,7 +138,7 @@ export default function ChatPage({ initialMatchId }) {
         </div>
 
         {/* 메시지 목록 - 아래에서 위로 쌓임 */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, background: '#FFF5FA' }}>
+        <div onClick={() => inputRef.current?.blur()} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, background: '#FFF5FA' }}>
           {messages.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 20px', marginTop: 'auto' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>💕</div>
