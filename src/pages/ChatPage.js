@@ -92,7 +92,7 @@ export default function ChatPage() {
     const chatStatus = getChatStatus()
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'white' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 68px)', background: 'white' }}>
         <div style={{ padding: '56px 16px 16px', borderBottom: '1px solid #FBF0F6', display: 'flex', alignItems: 'center', gap: 14 }}>
           <button onClick={() => setActiveMatch(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#9C6B84' }}>←</button>
           <div className="avatar">{otherUser?.avatar_url ? <img src={otherUser.avatar_url} alt="" /> : otherUser?.name?.[0]}</div>

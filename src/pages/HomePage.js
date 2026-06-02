@@ -18,11 +18,9 @@ const MODES = [
   { id: 'pet', label: '반려동물', emoji: '🐾', desc: '펫카페' },
 ]
 
-// 심장박동 비프음 (두근두근)
 function playHeartbeat() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    
     function beat(time) {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -36,19 +34,45 @@ function playHeartbeat() {
       osc.start(time)
       osc.stop(time + 0.12)
     }
-
-    // 두근 두근 두근 (3번)
     for (let i = 0; i < 3; i++) {
       beat(ctx.currentTime + i * 0.6)
       beat(ctx.currentTime + i * 0.6 + 0.18)
     }
-  } catch (e) {
-    console.log('Audio not supported')
-  }
-  // 안드로이드는 진동도 같이
-  if (navigator.vibrate) {
-    navigator.vibrate([100, 50, 100, 400, 100, 50, 100, 400, 100, 50, 100])
-  }
+  } catch (e) {}
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100, 400, 100, 50, 100, 400, 100, 50, 100])
+}
+
+function MatchInfo({ matchProfile, myProfile }) {
+  const commonHobbies = (matchProfile.hobbies || []).filter(h => (myProfile?.hobbies || []).includes(h))
+  
+  const rows = [
+    matchProfile.age && { label: '나이', value: `${matchProfile.age}세` },
+    matchProfile.height && { label: '키', value: `${matchProfile.height}cm` },
+    matchProfile.occupation && { label: '직업', value: matchProfile.occupation },
+    matchProfile.income_range && { label: '연봉', value: matchProfile.income_range },
+    matchProfile.ideal_marriage_intent && { label: '만남 목적', value: matchProfile.ideal_marriage_intent },
+  ].filter(Boolean)
+
+  return (
+    <div style={{ background: '#FFF5FA', borderRadius: 14, padding: '12px 16px', marginBottom: 14, textAlign: 'left', width: '100%' }}>
+      {rows.map((row, i) => (
+        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: i < rows.length - 1 || commonHobbies.length > 0 ? '1px solid #FBF0F6' : 'none' }}>
+          <span style={{ fontSize: 13, color: '#9C6B84' }}>{row.label}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#3D1A2E' }}>{row.value}</span>
+        </div>
+      ))}
+      {commonHobbies.length > 0 && (
+        <div style={{ paddingTop: 8 }}>
+          <div style={{ fontSize: 12, color: '#9C6B84', marginBottom: 6 }}>공통 취미</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {commonHobbies.map(h => (
+              <span key={h} className="chip selected" style={{ fontSize: 11 }}>{h}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function HomePage({ onGoToChat }) {
@@ -57,12 +81,11 @@ export default function HomePage({ onGoToChat }) {
   const [isActive, setIsActive] = useState(false)
   const [matchNotifs, setMatchNotifs] = useState([])
   const [showMatch, setShowMatch] = useState(null)
-  const [chatRequest, setChatRequest] = useState(null) // 상대방이 보낸 채팅 요청
-  const [countdown, setCountdown] = useState(null) // 카운트다운
+  const [chatRequest, setChatRequest] = useState(null)
+  const [countdown, setCountdown] = useState(null)
   const countdownRef = useRef(null)
   const audioUnlocked = useRef(false)
 
-  // 화면 터치시 오디오 언락 (아이폰 필수)
   useEffect(() => {
     function unlock() {
       if (!audioUnlocked.current) {
@@ -81,16 +104,18 @@ export default function HomePage({ onGoToChat }) {
     }
   }, [])
 
-  // 상대방 채팅 요청 실시간 감지
   useEffect(() => {
     if (!user) return
+    const channelName = `match-updates-${user.id}`
     const sub = supabase
-      .channel('match-updates-' + (user?.id || 'anon'))
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'matches',
       }, async (payload) => {
         const match = payload.new
-        // 내가 user2이고 상대가 chat_requested한 경우
+        const isInvolved = match.user1_id === user.id || match.user2_id === user.id
+        if (!isInvolved) return
+
         if (match.user2_id === user.id && match.status === 'chat_requested') {
           const { data: senderProfile } = await supabase
             .from('profiles').select('*').eq('id', match.user1_id).single()
@@ -99,8 +124,8 @@ export default function HomePage({ onGoToChat }) {
             setChatRequest({ matchId: match.id, profile: senderProfile })
           }
         }
-        // 양쪽 다 수락해서 accepted된 경우
-        if ((match.user1_id === user.id || match.user2_id === user.id) && match.status === 'accepted') {
+
+        if (match.status === 'accepted') {
           clearInterval(countdownRef.current)
           setCountdown(null)
           setShowMatch(null)
@@ -125,12 +150,9 @@ export default function HomePage({ onGoToChat }) {
     else { setActiveMode(modeId); setIsActive(true) }
   }
 
-  // 채팅 요청하기
   async function handleChatRequest() {
     if (!showMatch?.matchId) return
     await supabase.from('matches').update({ status: 'chat_requested' }).eq('id', showMatch.matchId)
-    
-    // 10초 카운트다운
     setCountdown(10)
     let count = 10
     countdownRef.current = setInterval(async () => {
@@ -139,7 +161,6 @@ export default function HomePage({ onGoToChat }) {
       if (count <= 0) {
         clearInterval(countdownRef.current)
         setCountdown(null)
-        // 시간 초과 - 거절 처리
         await supabase.from('matches').update({ status: 'rejected' }).eq('id', showMatch.matchId)
         setShowMatch(null)
         alert('상대방이 다음에 만나요 😊')
@@ -147,7 +168,6 @@ export default function HomePage({ onGoToChat }) {
     }, 1000)
   }
 
-  // 채팅 수락
   async function acceptChat() {
     if (!chatRequest?.matchId) return
     await supabase.from('matches').update({ status: 'accepted' }).eq('id', chatRequest.matchId)
@@ -155,7 +175,6 @@ export default function HomePage({ onGoToChat }) {
     onGoToChat && onGoToChat()
   }
 
-  // 채팅 거절
   async function rejectChat() {
     if (!chatRequest?.matchId) return
     await supabase.from('matches').update({ status: 'rejected' }).eq('id', chatRequest.matchId)
@@ -166,7 +185,6 @@ export default function HomePage({ onGoToChat }) {
 
   return (
     <div style={{ paddingBottom: 80, background: '#FFF5FA', minHeight: '100vh' }}>
-      {/* 헤더 */}
       <div style={{ padding: '56px 24px 20px', background: 'white' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -179,7 +197,6 @@ export default function HomePage({ onGoToChat }) {
         </div>
       </div>
 
-      {/* 활성 모드 배너 */}
       {isActive && selectedMode ? (
         <div style={{ margin: '12px 16px', padding: '16px 20px', background: 'linear-gradient(135deg, #F9A8C9, #F472B6)', borderRadius: 18, color: 'white', boxShadow: '0 4px 20px rgba(244,114,182,0.3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -197,7 +214,6 @@ export default function HomePage({ onGoToChat }) {
         </div>
       )}
 
-      {/* 모드 그리드 */}
       <div style={{ padding: '0 16px' }}>
         <p style={{ fontSize: 12, fontWeight: 700, color: '#C4A0B5', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>지금 어디 계세요?</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
@@ -221,7 +237,6 @@ export default function HomePage({ onGoToChat }) {
         </div>
       </div>
 
-      {/* 최근 매칭 */}
       {matchNotifs.length > 0 && (
         <div style={{ padding: '24px 16px 0' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: '#C4A0B5', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>
@@ -234,7 +249,7 @@ export default function HomePage({ onGoToChat }) {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E' }}>{notif.profile.name}</div>
                   <div style={{ fontSize: 13, color: '#9C6B84', marginTop: 2 }}>
-                    {notif.distance}m 거리 • {notif.profile.hobbies?.slice(0, 2).join(', ')}
+                    {notif.distance}m · {notif.profile.age}세 · {notif.profile.height}cm · {notif.profile.occupation}
                   </div>
                 </div>
                 <div style={{ fontSize: 11, color: '#F472B6', fontWeight: 700 }}>NEW</div>
@@ -244,21 +259,19 @@ export default function HomePage({ onGoToChat }) {
         </div>
       )}
 
-      {/* 상대방 채팅 요청 팝업 */}
+      {/* 채팅 요청 팝업 */}
       {chatRequest && (
         <div className="match-popup">
           <div className="match-popup-card">
-            <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>💬</div>
             <h3 style={{ fontFamily: 'Nunito', fontSize: 20, fontWeight: 800, marginBottom: 8, color: '#3D1A2E' }}>
               채팅 요청이 왔어요!
             </h3>
             <div className="avatar" style={{ width: 64, height: 64, fontSize: 24, margin: '0 auto 12px' }}>
               {chatRequest.profile.name?.[0]}
             </div>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, color: '#3D1A2E' }}>{chatRequest.profile.name}</div>
-            <div style={{ color: '#9C6B84', fontSize: 13, marginBottom: 20 }}>
-              {chatRequest.profile.hobbies?.slice(0, 2).join(' • ')}
-            </div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12, color: '#3D1A2E' }}>{chatRequest.profile.name}</div>
+            <MatchInfo matchProfile={chatRequest.profile} myProfile={profile} />
             <button className="btn-primary" onClick={acceptChat} style={{ marginBottom: 10 }}>수락 ✓</button>
             <button className="btn-secondary" onClick={rejectChat}>나중에</button>
           </div>
@@ -268,25 +281,19 @@ export default function HomePage({ onGoToChat }) {
       {/* 매칭 팝업 */}
       {showMatch && !chatRequest && (
         <div className="match-popup">
-          <div className="match-popup-card">
-            <div style={{ fontSize: 48, marginBottom: 12 }}>💕</div>
-            <h3 style={{ fontFamily: 'Nunito', fontSize: 22, fontWeight: 800, marginBottom: 8, color: '#3D1A2E' }}>
+          <div className="match-popup-card" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>💕</div>
+            <h3 style={{ fontFamily: 'Nunito', fontSize: 20, fontWeight: 800, marginBottom: 6, color: '#3D1A2E' }}>
               근처에 있어요!
             </h3>
-            <div className="avatar" style={{ width: 72, height: 72, fontSize: 28, margin: '0 auto 16px' }}>
+            <div className="avatar" style={{ width: 64, height: 64, fontSize: 24, margin: '0 auto 12px' }}>
               {showMatch.profile.name?.[0] || '?'}
             </div>
-            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4, color: '#3D1A2E' }}>{showMatch.profile.name}</div>
-            <div style={{ color: '#9C6B84', fontSize: 14, marginBottom: 8 }}>{showMatch.distance}m 거리에 있어요</div>
-            {showMatch.profile.hobbies?.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
-                {showMatch.profile.hobbies.slice(0, 3).map(h => (
-                  <span key={h} className="chip selected" style={{ fontSize: 12 }}>{h}</span>
-                ))}
-              </div>
-            )}
+            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 2, color: '#3D1A2E' }}>{showMatch.profile.name}</div>
+            <div style={{ color: '#9C6B84', fontSize: 13, marginBottom: 12 }}>{showMatch.distance}m 거리에 있어요</div>
+            <MatchInfo matchProfile={showMatch.profile} myProfile={profile} />
             {countdown !== null ? (
-              <div style={{ padding: '16px', background: '#FDE8F2', borderRadius: 14, marginBottom: 10, textAlign: 'center' }}>
+              <div style={{ padding: '14px', background: '#FDE8F2', borderRadius: 14, marginBottom: 10, textAlign: 'center' }}>
                 <div style={{ fontSize: 32, fontWeight: 800, color: '#D4609A', fontFamily: 'Nunito' }}>{countdown}</div>
                 <div style={{ fontSize: 13, color: '#9C6B84' }}>상대방 응답 기다리는 중...</div>
               </div>
@@ -302,9 +309,7 @@ export default function HomePage({ onGoToChat }) {
         </div>
       )}
 
-      <style>{`
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-      `}</style>
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
     </div>
   )
 }
