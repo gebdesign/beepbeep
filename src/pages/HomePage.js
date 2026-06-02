@@ -130,7 +130,7 @@ export default function HomePage({ onGoToChat }) {
           setCountdown(null)
           setShowMatch(null)
           setChatRequest(null)
-          onGoToChat && onGoToChat()
+          onGoToChat && onGoToChat(match.id)
         }
       })
       .subscribe()
@@ -171,8 +171,9 @@ export default function HomePage({ onGoToChat }) {
   async function acceptChat() {
     if (!chatRequest?.matchId) return
     await supabase.from('matches').update({ status: 'accepted' }).eq('id', chatRequest.matchId)
+    const mid = chatRequest.matchId
     setChatRequest(null)
-    onGoToChat && onGoToChat()
+    onGoToChat && onGoToChat(mid)
   }
 
   async function rejectChat() {
