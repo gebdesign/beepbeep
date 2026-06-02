@@ -19,9 +19,9 @@ export default function ChatPage({ initialMatchId }) {
   const [newMsg, setNewMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const [showCookieModal, setShowCookieModal] = useState(false)
+  const [deleteMatchId, setDeleteMatchId] = useState(null)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
-  const chatContainerRef = useRef(null)
 
   useEffect(() => { fetchMatches() }, [user])
 
@@ -39,14 +39,13 @@ export default function ChatPage({ initialMatchId }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `match_id=eq.${activeMatch.id}` },
         payload => {
           setMessages(prev => [...prev, payload.new])
+          scrollToBottom()
         })
       .subscribe()
     return () => supabase.removeChannel(sub)
   }, [activeMatch])
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+  useEffect(() => { scrollToBottom() }, [messages])
 
   function scrollToBottom() {
     setTimeout(() => {
@@ -77,17 +76,19 @@ export default function ChatPage({ initialMatchId }) {
     const isPremiumPlus = profile?.plan === 'premium_plus'
     const cookieCount = profile?.cookie_count || 0
     const msgCount = messages.filter(m => m.sender_id === user.id).length
-    if (!isPremiumPlus) {
-      if (msgCount >= FREE_CHAT_LIMIT && cookieCount <= 0) {
-        setShowCookieModal(true)
-        return
-      }
+    if (!isPremiumPlus && msgCount >= FREE_CHAT_LIMIT && cookieCount <= 0) {
+      setShowCookieModal(true)
+      return
     }
     const content = newMsg.trim()
     setNewMsg('')
     await supabase.from('messages').insert({ match_id: activeMatch.id, sender_id: user.id, content })
-    inputRef.current?.focus()
-    scrollToBottom()
+  }
+
+  async function deleteMatch(matchId) {
+    await supabase.from('matches').update({ status: 'rejected' }).eq('id', matchId)
+    setMatches(prev => prev.filter(m => m.id !== matchId))
+    setDeleteMatchId(null)
   }
 
   function getOtherUser(match) {
@@ -114,7 +115,10 @@ export default function ChatPage({ initialMatchId }) {
         flexDirection: 'column',
         height: '100dvh',
         background: 'white',
-        paddingBottom: '68px'
+        /* 아이폰 키보드가 올라올때 레이아웃이 같이 올라오게 */
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 200
       }}>
         {/* 헤더 */}
         <div style={{ padding: '56px 16px 12px', borderBottom: '1px solid #FBF0F6', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, background: 'white' }}>
@@ -129,15 +133,17 @@ export default function ChatPage({ initialMatchId }) {
           </div>
         </div>
 
-        {/* 메시지 목록 */}
-        <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, background: '#FFF5FA' }}>
+        {/* 메시지 목록 - 아래에서 위로 쌓임 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, background: '#FFF5FA' }}>
           {messages.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ textAlign: 'center', padding: '40px 20px', marginTop: 'auto' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>💕</div>
               <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8, color: '#3D1A2E' }}>{otherUser?.name}님과 매칭됐어요!</div>
               <div style={{ fontSize: 14, color: '#9C6B84' }}>먼저 인사해봐요 👋</div>
             </div>
           )}
+          {/* 메시지가 아래서 위로 쌓이게 spacer */}
+          {messages.length > 0 && <div style={{ flex: 1 }} />}
           {messages.map(msg => {
             const isMine = msg.sender_id === user.id
             return (
@@ -158,9 +164,9 @@ export default function ChatPage({ initialMatchId }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 입력란 */}
+        {/* 입력란 - 키보드 바로 위에 */}
         {chatStatus.canChat ? (
-          <div style={{ flexShrink: 0, padding: '10px 16px', borderTop: '1px solid #FBF0F6', display: 'flex', gap: 10, background: 'white', paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
+          <div style={{ flexShrink: 0, padding: '10px 16px', borderTop: '1px solid #FBF0F6', display: 'flex', gap: 10, background: 'white' }}>
             <input
               ref={inputRef}
               className="input-field"
@@ -168,7 +174,6 @@ export default function ChatPage({ initialMatchId }) {
               value={newMsg}
               onChange={e => setNewMsg(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              onFocus={scrollToBottom}
               style={{ flex: 1 }}
             />
             <button onClick={sendMessage} disabled={!newMsg.trim()} style={{
@@ -181,7 +186,7 @@ export default function ChatPage({ initialMatchId }) {
         ) : (
           <div style={{ flexShrink: 0, padding: '12px 16px', background: 'white', borderTop: '1px solid #FBF0F6' }}>
             <div style={{ textAlign: 'center', fontSize: 14, color: '#9C6B84', marginBottom: 8 }}>채팅 횟수를 모두 사용했어요</div>
-            <button className="btn-primary" onClick={() => setShowCookieModal(true)} style={{ marginBottom: 8 }}>쿠키 구매하기 🍪</button>
+            <button className="btn-primary" onClick={() => setShowCookieModal(true)} style={{ marginBottom: 8 }}>더 대화하기 🍪</button>
           </div>
         )}
 
@@ -191,15 +196,11 @@ export default function ChatPage({ initialMatchId }) {
             <div style={{ background: 'white', borderRadius: '24px 24px 0 0', padding: '28px 24px 40px', width: '100%' }}>
               <div style={{ fontFamily: 'Nunito', fontSize: 20, fontWeight: 800, marginBottom: 4, color: '#3D1A2E' }}>채팅을 계속하려면 🍪</div>
               <div style={{ fontSize: 13, color: '#9C6B84', marginBottom: 20 }}>쿠키를 구매하거나 프리미엄+로 업그레이드하면 무제한으로 채팅할 수 있어요!</div>
-
-              {/* 프리미엄+ 업그레이드 */}
               <div style={{ background: 'linear-gradient(135deg, #FDE8F2, #EFF6FF)', borderRadius: 16, padding: '16px', marginBottom: 16, border: '1.5px solid #F9A8C9' }}>
                 <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E', marginBottom: 4 }}>💎 프리미엄+ $39.99/월</div>
                 <div style={{ fontSize: 13, color: '#9C6B84', marginBottom: 12 }}>채팅 무제한 + 나이/직업/연봉 정보 + 사진 공개</div>
                 <button className="btn-primary" style={{ padding: '12px' }}>프리미엄+로 업그레이드</button>
               </div>
-
-              {/* 쿠키 구매 */}
               <div style={{ fontSize: 13, fontWeight: 700, color: '#9C6B84', marginBottom: 10 }}>🍪 쿠키 구매 (1개 = 채팅 1회)</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
                 {COOKIE_PLANS.map(plan => (
@@ -237,17 +238,50 @@ export default function ChatPage({ initialMatchId }) {
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {matches.map(match => {
             const other = getOtherUser(match)
+            const isDeleting = deleteMatchId === match.id
             return (
-              <button key={match.id} onClick={() => setActiveMatch(match)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 12px', background: 'white', border: 'none', cursor: 'pointer', borderRadius: 16, textAlign: 'left', marginBottom: 4 }}>
-                <div className="avatar" style={{ flexShrink: 0 }}>{other?.name?.[0]}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E' }}>{other?.name}</div>
-                  <div style={{ fontSize: 13, color: '#C4A0B5', marginTop: 2 }}>{other?.age}세 · {other?.height}cm · {other?.occupation}</div>
-                </div>
-                <div style={{ fontSize: 16, color: '#F5D0E8' }}>›</div>
-              </button>
+              <div key={match.id} style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, marginBottom: 4 }}>
+                {/* 삭제 버튼 */}
+                {isDeleting && (
+                  <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, background: '#EF4444', display: 'flex', alignItems: 'center', padding: '0 20px', cursor: 'pointer', zIndex: 1, borderRadius: '0 16px 16px 0' }}
+                    onClick={() => deleteMatch(match.id)}>
+                    <span style={{ color: 'white', fontWeight: 700, fontSize: 14 }}>삭제</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => isDeleting ? setDeleteMatchId(null) : setActiveMatch(match)}
+                  onTouchStart={() => {}}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 12px', background: 'white', border: 'none', cursor: 'pointer', borderRadius: 16, textAlign: 'left', width: '100%', transform: isDeleting ? 'translateX(-80px)' : 'translateX(0)', transition: 'transform 0.2s' }}>
+                  <div className="avatar" style={{ flexShrink: 0 }}>{other?.name?.[0]}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E' }}>{other?.name}</div>
+                    <div style={{ fontSize: 13, color: '#C4A0B5', marginTop: 2 }}>{other?.age}세 · {other?.height}cm · {other?.occupation}</div>
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); setDeleteMatchId(isDeleting ? null : match.id) }}
+                    style={{ background: 'none', border: 'none', color: '#C4A0B5', fontSize: 18, cursor: 'pointer', padding: '4px 8px' }}>
+                    ···
+                  </button>
+                </button>
+              </div>
             )
           })}
+        </div>
+      )}
+
+      {/* 삭제 확인 */}
+      {deleteMatchId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,26,46,0.4)', display: 'flex', alignItems: 'flex-end', zIndex: 1000 }}
+          onClick={() => setDeleteMatchId(null)}>
+          <div style={{ background: 'white', borderRadius: '24px 24px 0 0', padding: '24px 24px 40px', width: '100%' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontFamily: 'Nunito', fontSize: 18, fontWeight: 800, marginBottom: 8, color: '#3D1A2E' }}>채팅을 삭제할까요?</div>
+            <div style={{ fontSize: 14, color: '#9C6B84', marginBottom: 20 }}>삭제하면 대화 내용이 모두 사라져요.</div>
+            <button onClick={() => deleteMatch(deleteMatchId)} style={{ width: '100%', padding: '14px', background: '#EF4444', border: 'none', borderRadius: 14, color: 'white', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
+              삭제
+            </button>
+            <button className="btn-secondary" onClick={() => setDeleteMatchId(null)}>취소</button>
+          </div>
         </div>
       )}
     </div>
