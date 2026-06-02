@@ -12,6 +12,12 @@ import './styles.css'
 function AppContent() {
   const { user, profile, loading, emailNotConfirmed } = useAuth()
   const [page, setPage] = useState('home')
+  const [activeChatMatchId, setActiveChatMatchId] = useState(null)
+
+  function goToChat(matchId) {
+    setActiveChatMatchId(matchId || null)
+    setPage('chat')
+  }
 
   if (loading) return (
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: '#FFF5FA' }}>
@@ -37,11 +43,11 @@ function AppContent() {
 
   return (
     <div className="app-container">
-      {page === 'home' && <HomePage onGoToChat={() => setPage('chat')} />}
+      {page === 'home' && <HomePage onGoToChat={(matchId) => goToChat(matchId)} />}
       {page === 'explore' && <ExplorePage />}
-      {page === 'chat' && <ChatPage />}
+      {page === 'chat' && <ChatPage initialMatchId={activeChatMatchId} />}
       {page === 'mypage' && <MyPage />}
-      <BottomNav current={page} onChange={setPage} />
+      <BottomNav current={page} onChange={(p) => { setPage(p); if (p !== 'chat') setActiveChatMatchId(null) }} />
     </div>
   )
 }
