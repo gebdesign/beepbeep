@@ -48,8 +48,6 @@ function MatchInfo({ matchProfile, myProfile }) {
   const rows = [
     matchProfile.age && { label: '나이', value: `${matchProfile.age}세` },
     matchProfile.height && { label: '키', value: `${matchProfile.height}cm` },
-    matchProfile.occupation && { label: '직업', value: matchProfile.occupation },
-    matchProfile.income_range && { label: '연봉', value: matchProfile.income_range },
     matchProfile.ideal_marriage_intent && { label: '만남 목적', value: matchProfile.ideal_marriage_intent },
   ].filter(Boolean)
 

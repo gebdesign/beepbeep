@@ -21,10 +21,10 @@ export default function ChatPage({ initialMatchId }) {
   const [showCookieModal, setShowCookieModal] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const chatContainerRef = useRef(null)
 
   useEffect(() => { fetchMatches() }, [user])
 
-  // initialMatchId 있으면 바로 그 채팅방 열기
   useEffect(() => {
     if (initialMatchId && matches.length > 0) {
       const match = matches.find(m => m.id === initialMatchId)
@@ -39,13 +39,11 @@ export default function ChatPage({ initialMatchId }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `match_id=eq.${activeMatch.id}` },
         payload => {
           setMessages(prev => [...prev, payload.new])
-          scrollToBottom()
         })
       .subscribe()
     return () => supabase.removeChannel(sub)
   }, [activeMatch])
 
-  // 메시지 바뀔 때 스크롤
   useEffect(() => {
     scrollToBottom()
   }, [messages])
@@ -53,7 +51,7 @@ export default function ChatPage({ initialMatchId }) {
   function scrollToBottom() {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, 50)
+    }, 100)
   }
 
   async function fetchMatches() {
@@ -89,6 +87,7 @@ export default function ChatPage({ initialMatchId }) {
     setNewMsg('')
     await supabase.from('messages').insert({ match_id: activeMatch.id, sender_id: user.id, content })
     inputRef.current?.focus()
+    scrollToBottom()
   }
 
   function getOtherUser(match) {
@@ -97,12 +96,12 @@ export default function ChatPage({ initialMatchId }) {
 
   function getChatStatus() {
     const isPremiumPlus = profile?.plan === 'premium_plus'
-    if (isPremiumPlus) return { canChat: true, label: '무제한' }
+    if (isPremiumPlus) return { canChat: true, label: '무제한', remaining: 999 }
     const cookieCount = profile?.cookie_count || 0
     const msgCount = messages.filter(m => m.sender_id === user.id).length
-    if (msgCount < FREE_CHAT_LIMIT) return { canChat: true, label: `${FREE_CHAT_LIMIT - msgCount}회 남음` }
-    if (cookieCount > 0) return { canChat: true, label: `🍪 ${cookieCount}개` }
-    return { canChat: false, label: '채팅 소진' }
+    if (msgCount < FREE_CHAT_LIMIT) return { canChat: true, label: `${FREE_CHAT_LIMIT - msgCount}회 남음`, remaining: FREE_CHAT_LIMIT - msgCount }
+    if (cookieCount > 0) return { canChat: true, label: `🍪 ${cookieCount}개`, remaining: cookieCount }
+    return { canChat: false, label: '채팅 소진', remaining: 0 }
   }
 
   if (activeMatch) {
@@ -110,31 +109,34 @@ export default function ChatPage({ initialMatchId }) {
     const chatStatus = getChatStatus()
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 68px)', background: 'white' }}>
+      <div style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'white',
+        zIndex: 50
+      }}>
         {/* 헤더 */}
-        <div style={{ padding: '56px 16px 12px', borderBottom: '1px solid #FBF0F6', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+        <div style={{ padding: '56px 16px 12px', borderBottom: '1px solid #FBF0F6', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, background: 'white' }}>
           <button onClick={() => setActiveMatch(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#9C6B84' }}>←</button>
-          <div className="avatar">{otherUser?.avatar_url ? <img src={otherUser.avatar_url} alt="" /> : otherUser?.name?.[0]}</div>
+          <div className="avatar">{otherUser?.name?.[0]}</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 16, color: '#3D1A2E' }}>{otherUser?.name}</div>
-            <div style={{ fontSize: 12, color: '#9C6B84' }}>
-              {otherUser?.age}세 · {otherUser?.height}cm
-            </div>
+            <div style={{ fontSize: 12, color: '#9C6B84' }}>{otherUser?.age}세 · {otherUser?.height}cm</div>
           </div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#D4609A', padding: '4px 10px', background: '#FDE8F2', borderRadius: 99 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: chatStatus.remaining <= 3 && chatStatus.remaining > 0 ? '#E84545' : '#D4609A', padding: '4px 10px', background: '#FDE8F2', borderRadius: 99 }}>
             {chatStatus.label}
           </div>
         </div>
 
-        {/* 메시지 목록 - flex: 1로 남은 공간 차지 */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 8px', display: 'flex', flexDirection: 'column', gap: 10, background: '#FFF5FA' }}>
+        {/* 메시지 목록 */}
+        <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, background: '#FFF5FA' }}>
           {messages.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>💕</div>
               <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8, color: '#3D1A2E' }}>{otherUser?.name}님과 매칭됐어요!</div>
-              <div style={{ fontSize: 14, color: '#9C6B84', lineHeight: 1.6 }}>
-                먼저 인사해봐요 👋
-              </div>
+              <div style={{ fontSize: 14, color: '#9C6B84' }}>먼저 인사해봐요 👋</div>
             </div>
           )}
           {messages.map(msg => {
@@ -157,9 +159,9 @@ export default function ChatPage({ initialMatchId }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 입력란 - 항상 화면 아래 고정 */}
+        {/* 입력란 */}
         {chatStatus.canChat ? (
-          <div style={{ flexShrink: 0, padding: '10px 16px 12px', borderTop: '1px solid #FBF0F6', display: 'flex', gap: 10, background: 'white' }}>
+          <div style={{ flexShrink: 0, padding: '10px 16px', borderTop: '1px solid #FBF0F6', display: 'flex', gap: 10, background: 'white', paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
             <input
               ref={inputRef}
               className="input-field"
@@ -167,6 +169,7 @@ export default function ChatPage({ initialMatchId }) {
               value={newMsg}
               onChange={e => setNewMsg(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
+              onFocus={scrollToBottom}
               style={{ flex: 1 }}
             />
             <button onClick={sendMessage} disabled={!newMsg.trim()} style={{
@@ -178,22 +181,33 @@ export default function ChatPage({ initialMatchId }) {
           </div>
         ) : (
           <div style={{ flexShrink: 0, padding: '12px 16px', background: 'white', borderTop: '1px solid #FBF0F6' }}>
-            <div style={{ textAlign: 'center', fontSize: 14, color: '#9C6B84', marginBottom: 8 }}>🍪 채팅 횟수를 모두 사용했어요</div>
-            <button className="btn-primary" onClick={() => setShowCookieModal(true)}>쿠키 구매하기</button>
+            <div style={{ textAlign: 'center', fontSize: 14, color: '#9C6B84', marginBottom: 8 }}>채팅 횟수를 모두 사용했어요</div>
+            <button className="btn-primary" onClick={() => setShowCookieModal(true)} style={{ marginBottom: 8 }}>쿠키 구매하기 🍪</button>
           </div>
         )}
 
-        {/* 쿠키 모달 */}
+        {/* 쿠키/업그레이드 모달 */}
         {showCookieModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,26,46,0.5)', display: 'flex', alignItems: 'flex-end', zIndex: 1000 }}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,26,46,0.6)', display: 'flex', alignItems: 'flex-end', zIndex: 1000 }}>
             <div style={{ background: 'white', borderRadius: '24px 24px 0 0', padding: '28px 24px 40px', width: '100%' }}>
-              <div style={{ fontFamily: 'Nunito', fontSize: 20, fontWeight: 800, marginBottom: 6, color: '#3D1A2E' }}>🍪 beepbeep 쿠키</div>
-              <div style={{ fontSize: 13, color: '#9C6B84', marginBottom: 16 }}>쿠키 1개 = 채팅 1회</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              <div style={{ fontFamily: 'Nunito', fontSize: 20, fontWeight: 800, marginBottom: 4, color: '#3D1A2E' }}>채팅을 계속하려면 🍪</div>
+              <div style={{ fontSize: 13, color: '#9C6B84', marginBottom: 20 }}>쿠키를 구매하거나 프리미엄+로 업그레이드하면 무제한으로 채팅할 수 있어요!</div>
+
+              {/* 프리미엄+ 업그레이드 */}
+              <div style={{ background: 'linear-gradient(135deg, #FDE8F2, #EFF6FF)', borderRadius: 16, padding: '16px', marginBottom: 16, border: '1.5px solid #F9A8C9' }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E', marginBottom: 4 }}>💎 프리미엄+ $39.99/월</div>
+                <div style={{ fontSize: 13, color: '#9C6B84', marginBottom: 12 }}>채팅 무제한 + 나이/직업/연봉 정보 + 사진 공개</div>
+                <button className="btn-primary" style={{ padding: '12px' }}>프리미엄+로 업그레이드</button>
+              </div>
+
+              {/* 쿠키 구매 */}
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#9C6B84', marginBottom: 10 }}>🍪 쿠키 구매 (1개 = 채팅 1회)</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
                 {COOKIE_PLANS.map(plan => (
-                  <button key={plan.count} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#FFF5FA', borderRadius: 12, border: '1.5px solid #F5D0E8', cursor: 'pointer' }}>
-                    <div style={{ fontWeight: 700, color: '#3D1A2E' }}>🍪 {plan.count}개</div>
-                    <div style={{ fontWeight: 700, color: '#D4609A' }}>{plan.price}</div>
+                  <button key={plan.count} style={{ padding: '12px', background: '#FFF5FA', borderRadius: 12, border: '1.5px solid #F5D0E8', cursor: 'pointer', textAlign: 'center' }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E' }}>🍪 {plan.count}개</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#D4609A' }}>{plan.price}</div>
+                    <div style={{ fontSize: 11, color: '#C4A0B5' }}>개당 {plan.perMsg}</div>
                   </button>
                 ))}
               </div>
@@ -218,7 +232,7 @@ export default function ChatPage({ initialMatchId }) {
         <div style={{ textAlign: 'center', padding: '60px 24px' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>💤</div>
           <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8, color: '#3D1A2E' }}>아직 매칭이 없어요</div>
-          <div style={{ color: '#9C6B84', fontSize: 14, lineHeight: 1.6 }}>홈에서 모드를 켜고 나가보세요!</div>
+          <div style={{ color: '#9C6B84', fontSize: 14 }}>홈에서 모드를 켜고 나가보세요!</div>
         </div>
       ) : (
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
