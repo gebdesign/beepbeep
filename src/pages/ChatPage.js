@@ -110,12 +110,11 @@ export default function ChatPage({ initialMatchId }) {
 
     return (
       <div style={{
-        position: 'fixed',
-        top: 0, left: 0, right: 0, bottom: 0,
         display: 'flex',
         flexDirection: 'column',
+        height: '100dvh',
         background: 'white',
-        zIndex: 50
+        paddingBottom: '68px'
       }}>
         {/* 헤더 */}
         <div style={{ padding: '56px 16px 12px', borderBottom: '1px solid #FBF0F6', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, background: 'white' }}>
