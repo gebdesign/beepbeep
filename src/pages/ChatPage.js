@@ -181,6 +181,8 @@ export default function ChatPage({ initialMatchId }) {
               style={{ flex: 1 }}
             />
             <button
+              onMouseDown={e => e.preventDefault()}
+              onTouchEnd={e => { e.preventDefault(); sendMessage() }}
               onClick={sendMessage}
               disabled={!newMsg.trim()}
               style={{
