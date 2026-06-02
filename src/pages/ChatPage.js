@@ -19,39 +19,42 @@ export default function ChatPage({ initialMatchId }) {
   const [newMsg, setNewMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const [showCookieModal, setShowCookieModal] = useState(false)
-  const [deleteMatchId, setDeleteMatchId] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [initialHandled, setInitialHandled] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
   useEffect(() => { fetchMatches() }, [user])
 
+  // initialMatchId는 최초 1회만 처리
   useEffect(() => {
-    if (initialMatchId && matches.length > 0) {
+    if (initialMatchId && matches.length > 0 && !initialHandled) {
       const match = matches.find(m => m.id === initialMatchId)
-      if (match) setActiveMatch(match)
+      if (match) {
+        setActiveMatch(match)
+        setInitialHandled(true)
+      }
     }
-  }, [initialMatchId, matches])
+  }, [initialMatchId, matches, initialHandled])
 
   useEffect(() => {
     if (!activeMatch) return
     fetchMessages(activeMatch.id)
     const sub = supabase.channel(`messages:${activeMatch.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `match_id=eq.${activeMatch.id}` },
-        payload => {
-          setMessages(prev => [...prev, payload.new])
-          scrollToBottom()
-        })
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: `match_id=eq.${activeMatch.id}`
+      }, payload => {
+        setMessages(prev => [...prev, payload.new])
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+      })
       .subscribe()
     return () => supabase.removeChannel(sub)
   }, [activeMatch])
 
-  useEffect(() => { scrollToBottom() }, [messages])
-
-  function scrollToBottom() {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
-  }
+  useEffect(() => {
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+  }, [messages])
 
   async function fetchMatches() {
     if (!user) return
@@ -83,16 +86,16 @@ export default function ChatPage({ initialMatchId }) {
     const content = newMsg.trim()
     setNewMsg('')
     await supabase.from('messages').insert({ match_id: activeMatch.id, sender_id: user.id, content })
-    // 키보드 유지
-    setTimeout(() => inputRef.current?.focus(), 50)
+    // 아이폰 사파리에서 키보드 유지 - input에 포커스 유지
+    requestAnimationFrame(() => inputRef.current?.focus())
   }
 
-  async function deleteMatch(matchId) {
-    await supabase.from('matches').update({ status: 'rejected' }).eq('id', matchId)
-    setMatches(prev => prev.filter(m => m.id !== matchId))
-    setDeleteMatchId(null)
-    // 삭제 후 목록으로만 이동, 채팅방 안 열림
-    if (activeMatch?.id === matchId) setActiveMatch(null)
+  async function confirmDelete() {
+    if (!confirmDeleteId) return
+    await supabase.from('matches').update({ status: 'rejected' }).eq('id', confirmDeleteId)
+    setMatches(prev => prev.filter(m => m.id !== confirmDeleteId))
+    setConfirmDeleteId(null)
+    // 채팅방으로 이동하지 않음
   }
 
   function getOtherUser(match) {
@@ -109,20 +112,16 @@ export default function ChatPage({ initialMatchId }) {
     return { canChat: false, label: '채팅 소진', remaining: 0 }
   }
 
+  // 채팅방 뷰
   if (activeMatch) {
     const otherUser = getOtherUser(activeMatch)
     const chatStatus = getChatStatus()
 
     return (
       <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100dvh',
-        background: 'white',
-        /* 아이폰 키보드가 올라올때 레이아웃이 같이 올라오게 */
-        position: 'fixed',
-        top: 0, left: 0, right: 0, bottom: 0,
-        zIndex: 200
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        display: 'flex', flexDirection: 'column',
+        background: 'white', zIndex: 200
       }}>
         {/* 헤더 */}
         <div style={{ padding: '56px 16px 12px', borderBottom: '1px solid #FBF0F6', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, background: 'white' }}>
@@ -137,17 +136,18 @@ export default function ChatPage({ initialMatchId }) {
           </div>
         </div>
 
-        {/* 메시지 목록 - 아래에서 위로 쌓임 */}
-        <div onClick={() => inputRef.current?.blur()} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, background: '#FFF5FA' }}>
+        {/* 메시지 영역 - 배경 탭하면 키보드 내려감 */}
+        <div
+          onClick={() => inputRef.current?.blur()}
+          style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, background: '#FFF5FA' }}>
           {messages.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px 20px', marginTop: 'auto' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px', textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>💕</div>
               <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8, color: '#3D1A2E' }}>{otherUser?.name}님과 매칭됐어요!</div>
               <div style={{ fontSize: 14, color: '#9C6B84' }}>먼저 인사해봐요 👋</div>
             </div>
           )}
-          {/* 메시지가 아래서 위로 쌓이게 spacer */}
-          {messages.length > 0 && <div style={{ flex: 1 }} />}
+          {messages.length > 0 && <div style={{ flex: 1, minHeight: 20 }} />}
           {messages.map(msg => {
             const isMine = msg.sender_id === user.id
             return (
@@ -168,7 +168,7 @@ export default function ChatPage({ initialMatchId }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 입력란 - 키보드 바로 위에 */}
+        {/* 입력란 */}
         {chatStatus.canChat ? (
           <div style={{ flexShrink: 0, padding: '10px 16px', borderTop: '1px solid #FBF0F6', display: 'flex', gap: 10, background: 'white' }}>
             <input
@@ -177,20 +177,23 @@ export default function ChatPage({ initialMatchId }) {
               placeholder="메세지를 입력하세요..."
               value={newMsg}
               onChange={e => setNewMsg(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && sendMessage()}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); sendMessage() } }}
               style={{ flex: 1 }}
             />
-            <button onClick={sendMessage} disabled={!newMsg.trim()} style={{
-              width: 48, height: 48, borderRadius: 14,
-              background: 'linear-gradient(135deg, #F9A8C9, #F472B6)',
-              border: 'none', cursor: 'pointer', color: 'white', fontSize: 20,
-              opacity: newMsg.trim() ? 1 : 0.5, flexShrink: 0
-            }}>↑</button>
+            <button
+              onClick={sendMessage}
+              disabled={!newMsg.trim()}
+              style={{
+                width: 48, height: 48, borderRadius: 14,
+                background: 'linear-gradient(135deg, #F9A8C9, #F472B6)',
+                border: 'none', cursor: 'pointer', color: 'white', fontSize: 20,
+                opacity: newMsg.trim() ? 1 : 0.5, flexShrink: 0
+              }}>↑</button>
           </div>
         ) : (
           <div style={{ flexShrink: 0, padding: '12px 16px', background: 'white', borderTop: '1px solid #FBF0F6' }}>
             <div style={{ textAlign: 'center', fontSize: 14, color: '#9C6B84', marginBottom: 8 }}>채팅 횟수를 모두 사용했어요</div>
-            <button className="btn-primary" onClick={() => setShowCookieModal(true)} style={{ marginBottom: 8 }}>더 대화하기 🍪</button>
+            <button className="btn-primary" onClick={() => setShowCookieModal(true)}>더 대화하기 🍪</button>
           </div>
         )}
 
@@ -199,7 +202,7 @@ export default function ChatPage({ initialMatchId }) {
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,26,46,0.6)', display: 'flex', alignItems: 'flex-end', zIndex: 1000 }}>
             <div style={{ background: 'white', borderRadius: '24px 24px 0 0', padding: '28px 24px 40px', width: '100%' }}>
               <div style={{ fontFamily: 'Nunito', fontSize: 20, fontWeight: 800, marginBottom: 4, color: '#3D1A2E' }}>채팅을 계속하려면 🍪</div>
-              <div style={{ fontSize: 13, color: '#9C6B84', marginBottom: 20 }}>쿠키를 구매하거나 프리미엄+로 업그레이드하면 무제한으로 채팅할 수 있어요!</div>
+              <div style={{ fontSize: 13, color: '#9C6B84', marginBottom: 16 }}>쿠키를 구매하거나 프리미엄+로 업그레이드하면 무제한으로 채팅할 수 있어요!</div>
               <div style={{ background: 'linear-gradient(135deg, #FDE8F2, #EFF6FF)', borderRadius: 16, padding: '16px', marginBottom: 16, border: '1.5px solid #F9A8C9' }}>
                 <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E', marginBottom: 4 }}>💎 프리미엄+ $39.99/월</div>
                 <div style={{ fontSize: 13, color: '#9C6B84', marginBottom: 12 }}>채팅 무제한 + 나이/직업/연봉 정보 + 사진 공개</div>
@@ -223,13 +226,14 @@ export default function ChatPage({ initialMatchId }) {
     )
   }
 
-  // 매칭 목록
+  // 채팅 목록 뷰
   return (
     <div style={{ paddingBottom: 80, background: '#FFF5FA', minHeight: '100vh' }}>
       <div style={{ padding: '56px 24px 20px', background: 'white' }}>
         <h1 style={{ fontFamily: 'Nunito', fontSize: 26, fontWeight: 800, color: '#3D1A2E' }}>채팅 💬</h1>
         <p style={{ color: '#9C6B84', fontSize: 14, marginTop: 4 }}>매칭된 분들과 대화해보세요</p>
       </div>
+
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>
       ) : matches.length === 0 ? (
@@ -239,33 +243,25 @@ export default function ChatPage({ initialMatchId }) {
           <div style={{ color: '#9C6B84', fontSize: 14 }}>홈에서 모드를 켜고 나가보세요!</div>
         </div>
       ) : (
-        <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {matches.map(match => {
             const other = getOtherUser(match)
-            const isDeleting = deleteMatchId === match.id
             return (
-              <div key={match.id} style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, marginBottom: 4 }}>
-                {/* 삭제 버튼 */}
-                {isDeleting && (
-                  <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, background: '#EF4444', display: 'flex', alignItems: 'center', padding: '0 20px', cursor: 'pointer', zIndex: 1, borderRadius: '0 16px 16px 0' }}
-                    onClick={() => deleteMatch(match.id)}>
-                    <span style={{ color: 'white', fontWeight: 700, fontSize: 14 }}>삭제</span>
-                  </div>
-                )}
+              <div key={match.id} style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: 16, overflow: 'hidden', marginBottom: 4 }}>
                 <button
-                  onClick={() => isDeleting ? setDeleteMatchId(null) : setActiveMatch(match)}
-                  onTouchStart={() => {}}
-                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 12px', background: 'white', border: 'none', cursor: 'pointer', borderRadius: 16, textAlign: 'left', width: '100%', transform: isDeleting ? 'translateX(-80px)' : 'translateX(0)', transition: 'transform 0.2s' }}>
+                  onClick={() => setActiveMatch(match)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 12px', background: 'none', border: 'none', cursor: 'pointer', flex: 1, textAlign: 'left' }}>
                   <div className="avatar" style={{ flexShrink: 0 }}>{other?.name?.[0]}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, color: '#3D1A2E' }}>{other?.name}</div>
                     <div style={{ fontSize: 13, color: '#C4A0B5', marginTop: 2 }}>{other?.age}세 · {other?.height}cm · {other?.occupation}</div>
                   </div>
-                  <button
-                    onClick={e => { e.stopPropagation(); setDeleteMatchId(isDeleting ? null : match.id) }}
-                    style={{ background: 'none', border: 'none', color: '#C4A0B5', fontSize: 18, cursor: 'pointer', padding: '4px 8px' }}>
-                    ···
-                  </button>
+                </button>
+                {/* 삭제 버튼 */}
+                <button
+                  onClick={() => setConfirmDeleteId(match.id)}
+                  style={{ padding: '14px 16px', background: 'none', border: 'none', color: '#C4A0B5', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>
+                  🗑️
                 </button>
               </div>
             )
@@ -273,18 +269,20 @@ export default function ChatPage({ initialMatchId }) {
         </div>
       )}
 
-      {/* 삭제 확인 */}
-      {deleteMatchId && (
+      {/* 삭제 확인 모달 */}
+      {confirmDeleteId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,26,46,0.4)', display: 'flex', alignItems: 'flex-end', zIndex: 1000 }}
-          onClick={() => setDeleteMatchId(null)}>
+          onClick={() => setConfirmDeleteId(null)}>
           <div style={{ background: 'white', borderRadius: '24px 24px 0 0', padding: '24px 24px 40px', width: '100%' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontFamily: 'Nunito', fontSize: 18, fontWeight: 800, marginBottom: 8, color: '#3D1A2E' }}>채팅을 삭제할까요?</div>
             <div style={{ fontSize: 14, color: '#9C6B84', marginBottom: 20 }}>삭제하면 대화 내용이 모두 사라져요.</div>
-            <button onClick={() => deleteMatch(deleteMatchId)} style={{ width: '100%', padding: '14px', background: '#EF4444', border: 'none', borderRadius: 14, color: 'white', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
+            <button
+              onClick={confirmDelete}
+              style={{ width: '100%', padding: '14px', background: '#EF4444', border: 'none', borderRadius: 14, color: 'white', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
               삭제
             </button>
-            <button className="btn-secondary" onClick={() => setDeleteMatchId(null)}>취소</button>
+            <button className="btn-secondary" onClick={() => setConfirmDeleteId(null)}>취소</button>
           </div>
         </div>
       )}
