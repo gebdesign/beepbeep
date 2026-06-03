@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { useMatching } from '../hooks/useMatching'
 import { supabase } from '../lib/supabase'
+import { registerPushNotification, sendLocalNotification } from '../lib/pushNotification'
 
 const MODES = [
   { id: 'daily', label: '데일리', emoji: '☀️', desc: '일상, 카페, 출퇴근' },
@@ -84,6 +85,11 @@ export default function HomePage({ onGoToChat }) {
   const countdownRef = useRef(null)
   const audioUnlocked = useRef(false)
 
+  // 푸시 알림 등록
+  useEffect(() => {
+    registerPushNotification()
+  }, [])
+
   useEffect(() => {
     function unlock() {
       if (!audioUnlocked.current) {
@@ -120,6 +126,10 @@ export default function HomePage({ onGoToChat }) {
           if (senderProfile) {
             playHeartbeat()
             setChatRequest({ matchId: match.id, profile: senderProfile })
+            sendLocalNotification(
+              'beepbeep 💬',
+              `${senderProfile.name}님이 채팅을 요청했어요!`
+            )
           }
         }
 
@@ -139,6 +149,11 @@ export default function HomePage({ onGoToChat }) {
     setShowMatch(matchData)
     setMatchNotifs(prev => [matchData, ...prev])
     playHeartbeat()
+    // 백그라운드 알림
+    sendLocalNotification(
+      'beepbeep 💕',
+      `${matchData.profile.name}님이 ${matchData.distance}m 근처에 있어요!`
+    )
   }
 
   useMatching({ onMatch: handleMatch, isActive: isActive && !!activeMode, currentMode: activeMode })
