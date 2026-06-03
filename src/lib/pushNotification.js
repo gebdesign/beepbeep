@@ -1,3 +1,4 @@
+
 // 푸시 알림 설정 및 전송
 
 export async function registerPushNotification() {
