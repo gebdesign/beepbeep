@@ -43,31 +43,56 @@ function playHeartbeat() {
   if (navigator.vibrate) navigator.vibrate([100, 50, 100, 400, 100, 50, 100, 400, 100, 50, 100])
 }
 
-function MatchInfo({ matchProfile, myProfile }) {
+function MatchInfo({ matchProfile, myProfile, currentMode }) {
   const commonHobbies = (matchProfile.hobbies || []).filter(h => (myProfile?.hobbies || []).includes(h))
-  
-  const rows = [
-    matchProfile.age && { label: '나이', value: `${matchProfile.age}세` },
-    matchProfile.height && { label: '키', value: `${matchProfile.height}cm` },
-    matchProfile.ideal_marriage_intent && { label: '만남 목적', value: matchProfile.ideal_marriage_intent },
-  ].filter(Boolean)
+
+  const modeLabels = {
+    daily: '데일리 ☀️', leisure: '여가 🌿', leisure_sport: '레저 ⚽',
+    shopping: '쇼핑 🛍️', friday: '금요일 🎉', weekend: '주말 🌅',
+    bar: '술집 🍺', club: '클럽 🎵', dining: '다이닝 🍽️',
+    travel: '여행 ✈️', culture: '문화 🎨', pet: '반려동물 🐾'
+  }
+
+  const matchedConditions = []
+  if (myProfile?.ideal_age_range?.length > 0 && !myProfile.ideal_age_range.includes('상관없음')) matchedConditions.push({ label: '나이', matched: true })
+  if (myProfile?.ideal_height_range?.length > 0 && !myProfile.ideal_height_range.includes('상관없음')) matchedConditions.push({ label: '키', matched: true })
+  if (matchProfile.ideal_marriage_intent && myProfile?.ideal_marriage_intent && matchProfile.ideal_marriage_intent === myProfile.ideal_marriage_intent) matchedConditions.push({ label: `만남 목적 (${matchProfile.ideal_marriage_intent})`, matched: true })
 
   return (
-    <div style={{ background: '#FFF5FA', borderRadius: 14, padding: '12px 16px', marginBottom: 14, textAlign: 'left', width: '100%' }}>
-      {rows.map((row, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: i < rows.length - 1 || commonHobbies.length > 0 ? '1px solid #FBF0F6' : 'none' }}>
-          <span style={{ fontSize: 13, color: '#9C6B84' }}>{row.label}</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#3D1A2E' }}>{row.value}</span>
-        </div>
-      ))}
-      {commonHobbies.length > 0 && (
-        <div style={{ paddingTop: 8 }}>
-          <div style={{ fontSize: 12, color: '#9C6B84', marginBottom: 6 }}>공통 취미</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {commonHobbies.map(h => (
-              <span key={h} className="chip selected" style={{ fontSize: 11 }}>{h}</span>
+    <div style={{ background: '#FFF5FA', borderRadius: 14, padding: '14px 16px', marginBottom: 14, textAlign: 'left', width: '100%' }}>
+      {/* 매칭된 조건 */}
+      {matchedConditions.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: '#C4A0B5', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>매칭 조건</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {matchedConditions.map((c, i) => (
+              <span key={i} style={{ background: '#FDE8F2', color: '#D4609A', borderRadius: 99, padding: '5px 12px', fontSize: 12, fontWeight: 600 }}>
+                ✓ {c.label}
+              </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 공통 취미 */}
+      {commonHobbies.length > 0 && (
+        <div style={{ marginBottom: currentMode ? 10 : 0 }}>
+          <div style={{ fontSize: 12, color: '#C4A0B5', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>공통 취미</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {commonHobbies.map(h => (
+              <span key={h} className="chip selected" style={{ fontSize: 12 }}>{h}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 현재 모드 */}
+      {currentMode && (
+        <div style={{ marginTop: commonHobbies.length > 0 || matchedConditions.length > 0 ? 10 : 0 }}>
+          <div style={{ fontSize: 12, color: '#C4A0B5', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>현재 모드</div>
+          <span style={{ background: 'linear-gradient(135deg, #F9A8C9, #F472B6)', color: 'white', borderRadius: 99, padding: '5px 14px', fontSize: 12, fontWeight: 600 }}>
+            {modeLabels[currentMode] || currentMode}
+          </span>
         </div>
       )}
     </div>
@@ -285,7 +310,7 @@ export default function HomePage({ onGoToChat }) {
               {chatRequest.profile.name?.[0]}
             </div>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12, color: '#3D1A2E' }}>{chatRequest.profile.name}</div>
-            <MatchInfo matchProfile={chatRequest.profile} myProfile={profile} />
+            <MatchInfo matchProfile={chatRequest.profile} myProfile={profile} currentMode={activeMode} />
             <button className="btn-primary" onClick={acceptChat} style={{ marginBottom: 10 }}>수락 ✓</button>
             <button className="btn-secondary" onClick={rejectChat}>나중에</button>
           </div>
@@ -305,7 +330,7 @@ export default function HomePage({ onGoToChat }) {
             </div>
             <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 2, color: '#3D1A2E' }}>{showMatch.profile.name}</div>
             <div style={{ color: '#9C6B84', fontSize: 13, marginBottom: 12 }}>{showMatch.distance}m 거리에 있어요</div>
-            <MatchInfo matchProfile={showMatch.profile} myProfile={profile} />
+            <MatchInfo matchProfile={showMatch.profile} myProfile={profile} currentMode={activeMode} />
             {countdown !== null ? (
               <div style={{ padding: '14px', background: '#FDE8F2', borderRadius: 14, marginBottom: 10, textAlign: 'center' }}>
                 <div style={{ fontSize: 32, fontWeight: 800, color: '#D4609A', fontFamily: 'Nunito' }}>{countdown}</div>
