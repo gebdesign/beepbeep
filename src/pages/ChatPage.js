@@ -64,7 +64,15 @@ export default function ChatPage({ initialMatchId }) {
       .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
       .eq('status', 'accepted')
       .order('created_at', { ascending: false })
-    setMatches(data || [])
+    // 상대방 ID 기준으로 중복 제거 (같은 상대와 여러 매치가 있을 경우 최신 1개만)
+    const seen = new Set()
+    const unique = (data || []).filter(m => {
+      const otherId = m.user1_id === user.id ? m.user2_id : m.user1_id
+      if (seen.has(otherId)) return false
+      seen.add(otherId)
+      return true
+    })
+    setMatches(unique)
     setLoading(false)
   }
 
