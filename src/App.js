@@ -6,8 +6,8 @@ import HomePage from './pages/HomePage'
 import ExplorePage from './pages/ExplorePage'
 import ChatPage from './pages/ChatPage'
 import MyPage from './pages/MyPage'
-import BottomNav from './components/BottomNav'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import BottomNav from './components/BottomNav'
 import './styles.css'
 
 function AppContent() {
