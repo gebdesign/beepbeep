@@ -2,6 +2,17 @@ import { useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabase'
 
+const EXEMPT_EMAILS = ['gebdesign@gmail.com']
+
+function validatePassword(password, email) {
+  if (EXEMPT_EMAILS.includes(email?.toLowerCase())) return null
+  if (password.length < 8) return '비밀번호는 8자리 이상이어야 해요'
+  if (!/[A-Z]/.test(password)) return '대문자를 최소 1개 포함해주세요'
+  if (!/[0-9]/.test(password)) return '숫자를 최소 1개 포함해주세요'
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) return '특수문자를 최소 1개 포함해주세요 (!@#$% 등)'
+  return null
+}
+
 export default function AuthPage() {
   const [mode, setMode] = useState('welcome')
   const [email, setEmail] = useState('')
@@ -10,21 +21,6 @@ export default function AuthPage() {
   const [error, setError] = useState('')
   const [resetSent, setResetSent] = useState(false)
   const { signIn, signUp } = useAuth()
-
-  async function handleForgotPassword() {
-    if (!email) {
-      setError('이메일을 먼저 입력해주세요')
-      return
-    }
-    setLoading(true)
-    setError('')
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`
-    })
-    setLoading(false)
-    if (error) setError(error.message)
-    else setResetSent(true)
-  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -35,6 +31,8 @@ export default function AuthPage() {
         const { error } = await signIn(email, password)
         if (error) setError(error.message)
       } else {
+        const validationError = validatePassword(password, email)
+        if (validationError) { setError(validationError); setLoading(false); return }
         const { error } = await signUp(email, password)
         if (error) setError(error.message)
         else setMode('verify')
@@ -43,6 +41,18 @@ export default function AuthPage() {
       setError('문제가 생겼어요. 다시 시도해주세요.')
     }
     setLoading(false)
+  }
+
+  async function handleForgotPassword() {
+    if (!email) { setError('이메일을 먼저 입력해주세요'); return }
+    setLoading(true)
+    setError('')
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://beepbeep-lake.vercel.app'
+    })
+    setLoading(false)
+    if (error) setError(error.message)
+    else setResetSent(true)
   }
 
   if (mode === 'welcome') return (
@@ -138,6 +148,11 @@ export default function AuthPage() {
       </div>
 
       <div style={{ flex: 1, padding: '0 24px 32px', background: 'white' }}>
+        {mode === 'signup' && (
+          <div style={{ background: '#FFF5FA', borderRadius: 12, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#9C6B84', lineHeight: 1.7 }}>
+            비밀번호 조건: 8자 이상 · 대문자 · 숫자 · 특수문자(!@#$% 등) 각 1개 이상
+          </div>
+        )}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
             <label style={{ fontSize: 13, fontWeight: 700, color: '#3D1A2E', display: 'block', marginBottom: 8 }}>이메일</label>
@@ -145,7 +160,7 @@ export default function AuthPage() {
           </div>
           <div>
             <label style={{ fontSize: 13, fontWeight: 700, color: '#3D1A2E', display: 'block', marginBottom: 8 }}>비밀번호</label>
-            <input className="input-field" type="password" placeholder="6자리 이상" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
+            <input className="input-field" type="password" placeholder={mode === 'signup' ? '8자 이상, 대문자+숫자+특수문자 포함' : '비밀번호'} value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'signup' ? 8 : 1} />
           </div>
           {error && (
             <div style={{ background: '#FFF0F7', border: '1px solid #F9A8C9', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#D4609A' }}>
@@ -154,7 +169,7 @@ export default function AuthPage() {
           )}
           {resetSent && (
             <div style={{ background: '#F0FFF4', border: '1px solid #86EFAC', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#16A34A' }}>
-              ✅ 비밀번호 재설정 링크를 이메일로 보냈어요!
+              재설정 링크를 이메일로 보냈어요 📧
             </div>
           )}
           <button className="btn-primary" type="submit" disabled={loading} style={{ marginTop: 8 }}>
