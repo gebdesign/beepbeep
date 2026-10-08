@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -24,6 +25,12 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true)
+        setUser(u)
+        setLoading(false)
+        return
+      }
       if (u && !u.email_confirmed_at) {
         setEmailNotConfirmed(true)
         setLoading(false)
@@ -31,6 +38,7 @@ export function AuthProvider({ children }) {
       }
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setEmailNotConfirmed(false)
+        setIsPasswordRecovery(false)
       }
       setUser(u)
       if (u) fetchProfile(u.id)
@@ -75,7 +83,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, emailNotConfirmed, signUp, signIn, signOut, updateProfile, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, emailNotConfirmed, isPasswordRecovery, setIsPasswordRecovery, signUp, signIn, signOut, updateProfile, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )
