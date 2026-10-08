@@ -7,10 +7,11 @@ import ExplorePage from './pages/ExplorePage'
 import ChatPage from './pages/ChatPage'
 import MyPage from './pages/MyPage'
 import BottomNav from './components/BottomNav'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import './styles.css'
 
 function AppContent() {
-  const { user, profile, loading, emailNotConfirmed } = useAuth()
+  const { user, profile, loading, emailNotConfirmed, isPasswordRecovery } = useAuth()
   const [page, setPage] = useState('home')
   const [activeChatMatchId, setActiveChatMatchId] = useState(null)
 
@@ -25,6 +26,8 @@ function AppContent() {
       <div className="spinner" />
     </div>
   )
+
+  if (isPasswordRecovery) return <ResetPasswordPage />
 
   if (!user) return <AuthPage />
 
