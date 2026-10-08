@@ -38,7 +38,6 @@ export function AuthProvider({ children }) {
       }
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setEmailNotConfirmed(false)
-        setIsPasswordRecovery(false)
       }
       setUser(u)
       if (u) fetchProfile(u.id)
